@@ -14,6 +14,12 @@ pip install numpy matplotlib joblib tqdm
 不依賴項目中的任何其他模組，可以完全獨立運行。
 """
 
+# ===== 配置參數 =====
+N_VALUES = [3]       # 要分析的 N 值列表
+N_JOBS = 16         # 並行進程數（建議設為 CPU 核心數）
+NUM_SAMPLES = 50000  # 每個(M,N)點的模擬樣本數
+# ===================
+
 import sys
 import os
 from datetime import datetime
@@ -32,11 +38,6 @@ from analysis.formulas import (
     paper_formula_5_collision_approx
 )
 
-# ===== 配置參數 =====
-N_VALUES = [3]       # 要分析的 N 值列表
-N_JOBS = 16         # 並行進程數（建議設為 CPU 核心數）
-NUM_SAMPLES = 50000  # 每個(M,N)點的模擬樣本數
-# ===================
 
 # ============================================================================
 # 繪圖函數（完全獨立，無需外部依賴）

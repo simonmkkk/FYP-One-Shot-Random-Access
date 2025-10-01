@@ -14,6 +14,11 @@ pip install numpy matplotlib joblib tqdm
 不依賴項目中的任何其他模組，可以完全獨立運行。
 """
 
+# ===== 配置參數 =====
+N_VALUES = [3]  # 要分析的 N 值列表，例如 [3, 14] 或 [14]
+N_JOBS = 16      # 並行進程數（建議設為 CPU 核心數）
+# ===================
+
 import os
 import sys
 from datetime import datetime
@@ -46,10 +51,7 @@ from analysis.formulas import (
 matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解決負號顯示問題
 
-# ===== 配置參數 =====
-N_VALUES = [3]  # 要分析的 N 值列表，例如 [3, 14] 或 [14]
-N_JOBS = 16      # 並行進程數（建議設為 CPU 核心數）
-# ===================
+
 
 # ============================================================================
 # 繪圖函數（完全獨立，無需外部依賴）
