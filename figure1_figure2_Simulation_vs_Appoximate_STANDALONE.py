@@ -17,7 +17,7 @@ pip install numpy matplotlib joblib tqdm
 # ===== 配置參數 =====
 N_VALUES = [3, 14]       # 要分析的 N 值列表
 N_JOBS = 16         # 並行進程數（建議設為 CPU 核心數）
-NUM_SAMPLES = 100000  # 每個(M,N)點的模擬樣本數
+NUM_SAMPLES = 1000  # 每個(M,N)點的模擬樣本數
 # ===================
 
 import sys
@@ -275,11 +275,33 @@ def generate_simulation_vs_approximation_data(n_values, n_jobs, num_samples):
                 'error_nc': error_nc
             }
         
-        # 並行處理所有 M 值
-        all_results = Parallel(n_jobs=n_jobs)(
-            delayed(process_single_M)(M, N, num_samples)
-            for M in tqdm(M_range, desc=f"  N={N} 模擬進度")
-        )
+        # 並行處理所有 M 值（分批顯示進度）
+        # 每批處理 n_jobs 個 M 值，顯示批次進度
+        all_results = []
+        num_batches = (len(M_range) + n_jobs - 1) // n_jobs  # 向上取整
+        
+        print(f"  分 {num_batches} 批處理，每批最多 {n_jobs} 個核心並行...")
+        
+        # 將 M_range 分批處理
+        for batch_idx in range(num_batches):
+            start_idx = batch_idx * n_jobs
+            end_idx = min((batch_idx + 1) * n_jobs, len(M_range))
+            batch_M_values = M_range[start_idx:end_idx]
+            batch_num = batch_idx + 1
+            
+            print(f"  批次 {batch_num}/{num_batches}: 正在處理 M={batch_M_values[0]}~{batch_M_values[-1]} (共{len(batch_M_values)}個)...")
+            
+            # 並行處理當前批次的 M 值
+            batch_start_time = time.time()
+            batch_results = Parallel(n_jobs=n_jobs)(
+                delayed(process_single_M)(M, N, num_samples)
+                for M in batch_M_values
+            )
+            batch_elapsed = time.time() - batch_start_time
+            
+            all_results.extend(batch_results)
+            print(f"  批次 {batch_num}/{num_batches}: ✓完成! (耗時: {batch_elapsed:.2f}秒, 累積完成: {end_idx}/{len(M_range)})")
+
         
         # 整理結果
         M_values = [r['M'] for r in all_results]
