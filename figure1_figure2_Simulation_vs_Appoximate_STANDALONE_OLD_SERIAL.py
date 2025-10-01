@@ -3,6 +3,10 @@
 """
 生成論文Figure 1和Figure 2的驗證版本：近似公式 vs 單次接入模擬的比較
 
+【舊版本 - 串行外層循環】
+此版本使用串行遍歷 M 值，每個 M 內部並行處理
+性能較慢，僅作為對比參考
+
 ====================================
 依賴套件（需要先安裝）：
 pip install numpy matplotlib joblib tqdm
@@ -220,13 +224,15 @@ def plot_figure2_simulation_validation(error_data, ax: 'matplotlib.axes.Axes' = 
     return created_fig if created_fig is not None else ax.figure
 
 # ============================================================================
-# 數據生成函數
+# 數據生成函數 - 【舊版本：串行外層循環】
 # ============================================================================
 
 def generate_simulation_vs_approximation_data(n_values, n_jobs, num_samples):
     """
     生成近似公式 vs 單次接入模擬的比較數據
-    用於驗證論文公式(4)和(5)的準確性
+    
+    【舊版本】：使用串行外層循環遍歷 M 值，每個 M 內部並行處理
+    性能較慢，約為新版本的 1/21
     
     Args:
         n_values: 要分析的 N 值列表
@@ -240,55 +246,56 @@ def generate_simulation_vs_approximation_data(n_values, n_jobs, num_samples):
     
     for N in n_values:
         print(f"\n正在生成 N={N} 的模擬vs近似比較數據...")
+        print(f"【使用舊版本：串行外層循環】")
         
         # 每個整數 M（1..10N）皆模擬
         M_range = list(range(1, 10*N + 1))
         
         start_time = time.time()
         
-        print(f"  總共需要模擬 {len(M_range)} 個數據點，每點 {num_samples} 樣本...")
-        print(f"  使用 {n_jobs} 個核心並行處理所有數據點...")
+        # 初始化結果列表
+        M_values = []
         
-        # 定義單個數據點的處理函數
-        def process_single_M(M, N, num_samples):
-            """處理單個 M 值的模擬"""
+        # 理論值 (近似公式)
+        theory_N_S = []
+        theory_N_C = []
+        
+        # 模擬值
+        sim_N_S = []
+        sim_N_C = []
+        
+        # 誤差
+        error_N_S = []
+        error_N_C = []
+        
+        print(f"  總共需要模擬 {len(M_range)} 個數據點，每點 {num_samples} 樣本...")
+        
+        # 【舊版本】：串行遍歷每個 M 值
+        for idx, M in enumerate(M_range):
+            if idx % 5 == 0:  # 每5個點顯示進度
+                print(f"  進度: {idx+1}/{len(M_range)} (M={M}, M/N={M/N:.2f})")
+            
             # 計算理論值（近似公式）
             theory_ns = paper_formula_4_success_approx(M, N)
             theory_nc = paper_formula_5_collision_approx(M, N)
             
-            # 執行模擬（內部也會並行）
+            # 執行模擬（內層並行）
             sim_ns, sim_nc, sim_idle = simulate_single_access_parallel(
-                M, N, num_samples, n_jobs=1  # 外層已並行，內層用單線程
+                M, N, num_samples, n_jobs  # 內層多核並行
             )
             
             # 計算相對誤差百分比
             error_ns = abs(sim_ns - theory_ns) / abs(theory_ns) * 100 if theory_ns > 0 else 0
             error_nc = abs(sim_nc - theory_nc) / abs(theory_nc) * 100 if theory_nc > 0 else 0
             
-            return {
-                'M': M,
-                'theory_ns': theory_ns / N,  # 正規化
-                'theory_nc': theory_nc / N,  # 正規化
-                'sim_ns': sim_ns / N,  # 正規化
-                'sim_nc': sim_nc / N,  # 正規化
-                'error_ns': error_ns,
-                'error_nc': error_nc
-            }
-        
-        # 並行處理所有 M 值
-        all_results = Parallel(n_jobs=n_jobs)(
-            delayed(process_single_M)(M, N, num_samples)
-            for M in tqdm(M_range, desc=f"  N={N} 模擬進度")
-        )
-        
-        # 整理結果
-        M_values = [r['M'] for r in all_results]
-        theory_N_S = [r['theory_ns'] for r in all_results]
-        theory_N_C = [r['theory_nc'] for r in all_results]
-        sim_N_S = [r['sim_ns'] for r in all_results]
-        sim_N_C = [r['sim_nc'] for r in all_results]
-        error_N_S = [r['error_ns'] for r in all_results]
-        error_N_C = [r['error_nc'] for r in all_results]
+            # 保存結果
+            M_values.append(M)
+            theory_N_S.append(theory_ns / N)  # 正規化
+            theory_N_C.append(theory_nc / N)  # 正規化
+            sim_N_S.append(sim_ns / N)  # 正規化
+            sim_N_C.append(sim_nc / N)  # 正規化
+            error_N_S.append(error_ns)
+            error_N_C.append(error_nc)
         
         elapsed_time = time.time() - start_time
         print(f"N={N} 模擬完成，耗時: {elapsed_time:.2f}秒")
@@ -341,12 +348,13 @@ def main():
     print("=" * 60)
     print("生成論文Figure 1和Figure 2的驗證版本")
     print("近似公式 vs 單次接入模擬的比較")
+    print("【舊版本 - 串行外層循環】")
     print(f"分析參數：N = {N_VALUES}, 並行進程數 = {N_JOBS}, 樣本數 = {NUM_SAMPLES}")
     print("=" * 60)
     
     # 生成模擬vs近似比較數據
     print("\n正在生成模擬vs近似比較數據...")
-    print(f"使用 {N_JOBS} 個核心並行計算，每點 {NUM_SAMPLES} 個樣本...")
+    print(f"使用 {N_JOBS} 個核心並行計算（僅內層並行），每點 {NUM_SAMPLES} 個樣本...")
     
     sim_vs_approx_data = generate_simulation_vs_approximation_data(
         n_values=N_VALUES,
@@ -393,7 +401,7 @@ def main():
             plot_figure2_simulation_validation(single_n_fig2_data, ax=ax2)
     
     # 保存組合圖
-    combined_path = os.path.join(figures_dir, f"figure1_2_simulation_combined_standalone_{timestamp}.png")
+    combined_path = os.path.join(figures_dir, f"figure1_2_simulation_combined_OLD_SERIAL_{timestamp}.png")
     fig_combined.savefig(combined_path, dpi=300, bbox_inches='tight')
     print(f"✓ 組合圖已保存：{combined_path}")
     
@@ -403,13 +411,13 @@ def main():
     # 分別保存單獨的圖表
     print("\n正在繪製並保存單獨的 Figure 1...")
     fig1 = plot_figure1_simulation_validation(sim_vs_approx_data)
-    fig1_path = os.path.join(figures_dir, f"figure1_simulation_validation_standalone_{timestamp}.png")
+    fig1_path = os.path.join(figures_dir, f"figure1_simulation_validation_OLD_SERIAL_{timestamp}.png")
     fig1.savefig(fig1_path, dpi=300, bbox_inches='tight')
     print(f"✓ Figure 1已保存：{fig1_path}")
     
     print("\n正在繪製並保存單獨的 Figure 2...")
     fig2 = plot_figure2_simulation_validation(error_data)
-    fig2_path = os.path.join(figures_dir, f"figure2_simulation_validation_standalone_{timestamp}.png")
+    fig2_path = os.path.join(figures_dir, f"figure2_simulation_validation_OLD_SERIAL_{timestamp}.png")
     fig2.savefig(fig2_path, dpi=300, bbox_inches='tight')
     print(f"✓ Figure 2已保存：{fig2_path}")
     
@@ -428,6 +436,7 @@ def main():
     print("  1. 模擬結果驗證了近似公式的準確性")
     print("  2. 較大的N值下，近似公式與模擬結果更接近")
     print("  3. 這證實了論文理論分析的正確性")
+    print("  【注意】此為舊版本（串行），速度約為新版本的 1/21")
     print("=" * 60)
 
 if __name__ == "__main__":

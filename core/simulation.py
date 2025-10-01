@@ -4,6 +4,49 @@ import numpy as np
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
+def simulate_single_access_parallel(M, N, num_samples=10000, n_jobs=1):
+    """
+    並行執行多次單次接入模擬（僅一個AC）
+    
+    Args:
+        M: 設備總數
+        N: RAO總數
+        num_samples: 模擬樣本數
+        n_jobs: 並行作業數
+    
+    Returns:
+        tuple: (平均成功RAO數, 平均碰撞RAO數, 平均空閒RAO數)
+    """
+    def _single_sample(M, N):
+        """單次模擬的核心邏輯"""
+        choices = np.random.randint(0, N, M)
+        rao_usage = np.bincount(choices, minlength=N)
+        success_raos = np.sum(rao_usage == 1)
+        collision_raos = np.sum(rao_usage >= 2)
+        idle_raos = np.sum(rao_usage == 0)
+        return success_raos, collision_raos, idle_raos
+    
+    if n_jobs == 1:
+        # 單線程執行
+        results = []
+        for _ in tqdm(range(num_samples), desc=f"模擬 M={M}, N={N}", leave=False):
+            results.append(_single_sample(M, N))
+    else:
+        # 並行執行
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(_single_sample)(M, N)
+            for _ in tqdm(range(num_samples), desc=f"模擬 M={M}, N={N}", leave=False)
+        )
+    
+    results_array = np.array(results)
+    
+    # 計算平均值
+    mean_success = np.mean(results_array[:, 0])
+    mean_collision = np.mean(results_array[:, 1])
+    mean_idle = np.mean(results_array[:, 2])
+    
+    return mean_success, mean_collision, mean_idle
+
 def simulate_single_sample(M, N, I_max):
     """
     模拟一次完整的群组寻呼过程（从第1个AC到第I_max个AC）
@@ -25,16 +68,11 @@ def simulate_single_sample(M, N, I_max):
             # 没有剩餘設備，但繼續統計RAO
             continue
             
-        # 當前AC中每個設備隨機選擇一個RAO
+        # 模擬當前AC的隨機接入（內聯邏輯以保持性能）
         choices = np.random.randint(0, current_raos, remaining_devices)
-        
-        # 統計每個RAO被選擇的次數
         rao_usage = np.bincount(choices, minlength=current_raos)
-        
-        # 計算成功、碰撞和空閑的RAO數量
         success_raos = np.sum(rao_usage == 1)
         collision_raos = np.sum(rao_usage >= 2)
-        idle_raos = current_raos - success_raos - collision_raos
         
         # 更新成功設備統計（成功設備在當前AC完成接入）
         success_count += success_raos
