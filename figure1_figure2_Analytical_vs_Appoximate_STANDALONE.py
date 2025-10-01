@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 生成論文Figure 1和Figure 2：單次隨機接入中近似公式的有效範圍分析
-獨立版本 - 僅依賴 formulas.py（核心公式模組）
+完全獨立版本 - 僅依賴標準庫和基礎科學計算套件
 
 ====================================
 依賴套件（需要先安裝）：
@@ -10,8 +10,8 @@ pip install numpy matplotlib joblib tqdm
 ====================================
 
 說明：
-此文件整合了原本在 analysis/single_access_analysis.py 中的數據生成代碼，
-但從 analysis/formulas.py 導入數學公式（核心模組，無條件保留）。
+此文件包含所有必需的代碼（數學公式、數據生成、繪圖函數），
+不依賴項目中的任何其他模組，可以完全獨立運行。
 """
 
 import os
@@ -50,6 +50,194 @@ matplotlib.rcParams['axes.unicode_minus'] = False  # 解決負號顯示問題
 N_VALUES = [3]  # 要分析的 N 值列表，例如 [3, 14] 或 [14]
 N_JOBS = 16      # 並行進程數（建議設為 CPU 核心數）
 # ===================
+
+# ============================================================================
+# 繪圖函數（完全獨立，無需外部依賴）
+# ============================================================================
+
+def extract_n_values_from_data(data_dict):
+    """從數據字典中提取 N 值列表"""
+    n_keys = []
+    n_values = []
+    for key in sorted(data_dict.keys()):
+        if key.startswith('N_'):
+            n_val = int(key.split('_')[1])
+            n_keys.append(key)
+            n_values.append(n_val)
+    return n_keys, n_values
+
+def plot_figure1(fig1_data, ax: 'matplotlib.axes.Axes' = None):
+    """
+    繪製論文Figure 1: 單次隨機接入中分析模型vs近似公式
+    動態處理任意數量的 N 值
+    """
+    # 從數據中自動提取 N 值
+    available_N_keys, available_N_values = extract_n_values_from_data(fig1_data)
+    if not available_N_keys:
+        raise ValueError(f"數據中沒有找到任何 N 值")
+
+    # 若外部提供單一軸，僅在單一 N 場景下於該軸繪製
+    if ax is not None:
+        if len(available_N_keys) != 1:
+            raise ValueError("提供 ax 時，Fig.1 目前僅支援單一 N 值的繪製。請在主程式限制 N_VALUES 為單一值。")
+        fig = ax.figure
+        N_key = available_N_keys[0]
+        N_value = available_N_values[0]
+        N_data = fig1_data[N_key]
+        # 成功RAO: 分析模型 vs 近似公式4
+        ax.plot(N_data['M_over_N'], N_data['analytical_N_S'], 'ko-', linewidth=1.5, markersize=4, 
+                label=f'N={N_value} $N_{{S,1}}$/N Analytical Model')
+        ax.plot(N_data['M_over_N'], N_data['approx_N_S'], 'k:', linewidth=1.5, 
+                label='$N_{S,1}$/N Derived Performance Metric, Eq. (4)')
+        # 碰撞RAO: 分析模型 vs 近似公式5
+        ax.plot(N_data['M_over_N'], N_data['analytical_N_C'], 'ko', fillstyle='none', markersize=4, linewidth=1.5,
+                label=f'N={N_value} $N_{{C,1}}$/N Analytical Model')
+        ax.plot(N_data['M_over_N'], N_data['approx_N_C'], 'k--', linewidth=1.5, 
+                label='$N_{C,1}$/N Derived Performance Metric, Eq. (5)')
+        ax.set_xlabel('M/N', fontsize=12)
+        ax.set_ylabel('RAOs/N', fontsize=12)
+        ax.set_title(f'Fig. 1. Analytical and approximation results of $N_{{S,1}}$/N and $N_{{C,1}}$/N', 
+                    fontsize=11)
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8, loc='best')
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 1)
+        return fig
+
+    # 否則按原邏輯建立子圖
+    num_plots = len(available_N_keys)
+    if num_plots == 1:
+        fig, axes = plt.subplots(1, 1, figsize=(10, 6))
+        axes = [axes]
+    elif num_plots == 2:
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    else:
+        rows = (num_plots + 1) // 2
+        cols = 2
+        fig, axes = plt.subplots(rows, cols, figsize=(16, 6*rows))
+        if rows > 1:
+            axes = axes.flatten()
+        else:
+            axes = [axes] if num_plots == 1 else axes
+    
+    # 動態繪製每個 N 值的子圖
+    subplot_labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']  # 支援最多6個子圖
+    
+    for i, (N_key, N_value) in enumerate(zip(available_N_keys, available_N_values)):
+        if i >= len(axes):
+            break  # 防止索引超出範圍
+            
+        N_data = fig1_data[N_key]
+        ax = axes[i]
+        
+        # 成功RAO: 分析模型 vs 近似公式4
+        ax.plot(N_data['M_over_N'], N_data['analytical_N_S'], 'b-', 
+                linewidth=2, label='Successful RAOs (Analytical, Eq. 3)')
+        ax.plot(N_data['M_over_N'], N_data['approx_N_S'], 'b--', 
+                linewidth=2, label='Successful RAOs (Approximation, Eq. 4)')
+        
+        # 碰撞RAO: 分析模型 vs 近似公式5
+        ax.plot(N_data['M_over_N'], N_data['analytical_N_C'], 'r-', 
+                linewidth=2, label='Collision RAOs (Analytical, Eq. 2)')
+        ax.plot(N_data['M_over_N'], N_data['approx_N_C'], 'r--', 
+                linewidth=2, label='Collision RAOs (Approximation, Eq. 5)')
+        
+        ax.set_xlabel('M/N', fontsize=12)
+        ax.set_ylabel('Normalized RAOs', fontsize=12)
+        
+        # 動態設置標題
+        subplot_label = subplot_labels[i] if i < len(subplot_labels) else f'({chr(97+i)})'
+        ax.set_title(f'{subplot_label} N={N_value}: Analytical vs Approximation', 
+                    fontsize=13, fontweight='bold')
+        
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=9)
+        ax.set_xlim(0, 10)
+        
+        # 動態設置 y 軸範圍
+        max_y = max(max(N_data['analytical_N_C']), max(N_data['approx_N_C']))
+        ax.set_ylim(0, max_y * 1.1)
+    
+    # 隱藏多餘的子圖（如果有的話）
+    if num_plots < len(axes):
+        for j in range(num_plots, len(axes)):
+            axes[j].set_visible(False)
+    
+    # 動態設置主標題
+    N_values_str = ', '.join(map(str, available_N_values))
+    if len(available_N_values) == 1:
+        title = f'Fig. 1. Validity range of approximation in single random access (N={N_values_str})'
+    else:
+        title = f'Fig. 1. Validity range of approximation in single random access (N={N_values_str})'
+    
+    plt.suptitle(title, fontsize=14, fontweight='bold')
+    
+    plt.tight_layout()
+    return fig
+
+def plot_figure2(fig2_data, ax: 'matplotlib.axes.Axes' = None):
+    """
+    繪製論文Figure 2: 絕對近似誤差分析
+    動態處理任意數量的 N 值，使用不同的線型和標記區分
+    """
+    created_fig = None
+    if ax is None:
+        created_fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # 從數據中自動提取 N 值
+    available_N_keys, available_N_values = extract_n_values_from_data(fig2_data)
+    
+    if not available_N_keys:
+        raise ValueError(f"數據中沒有找到任何 N 值")
+    
+    # 動態繪製每個 N 值的誤差曲線（使用論文格式）
+    for i, (N_key, N_value) in enumerate(zip(available_N_keys, available_N_values)):
+        N_data = fig2_data[N_key]
+        
+        # 根據 N 值選擇不同的樣式
+        if i == 0:
+            # 第一個 N 值：使用標記點
+            # 成功 RAO 誤差（實心圓標記 + 實線）
+            ax.plot(N_data['M_over_N'], N_data['N_S_error'], 
+                    'ko-', linewidth=1.5, markersize=4,
+                    label=f'N={N_value} $N_{{S,1}}$/N')
+            # 碰撞 RAO 誤差（空心圓標記 + 實線）
+            ax.plot(N_data['M_over_N'], N_data['N_C_error'], 
+                    'ko-', fillstyle='none', linewidth=1.5, markersize=4,
+                    label=f'N={N_value} $N_{{C,1}}$/N')
+        else:
+            # 其他 N 值：僅使用線型
+            # 成功 RAO 誤差（實線）
+            ax.plot(N_data['M_over_N'], N_data['N_S_error'], 
+                    'k-', linewidth=1.5,
+                    label=f'N={N_value} $N_{{S,1}}$/N')
+            # 碰撞 RAO 誤差（虛線）
+            ax.plot(N_data['M_over_N'], N_data['N_C_error'], 
+                    'k--', linewidth=1.5,
+                    label=f'N={N_value} $N_{{C,1}}$/N')
+    
+    # 設置軸和標籤
+    ax.set_xlabel('M/N', fontsize=12)
+    ax.set_ylabel('Approximation Error (%)', fontsize=12)
+    ax.set_xlim(0, 10)
+    
+    # 設置對數縱軸 (按照論文Figure 2: 10^-2 到 10^3)
+    ax.set_yscale('log')
+    ax.set_ylim(1e-2, 1e3)
+    
+    # 添加網格
+    ax.grid(True, alpha=0.3)
+    
+    # 添加圖例
+    ax.legend(fontsize=8, loc='best')
+    
+    # 動態設置標題
+    N_values_str = ' and '.join(map(str, available_N_values))
+    title = f'Fig. 2. Absolute approximation error of $N_{{S,1}}$/N and $N_{{C,1}}$/N with N = {N_values_str}'
+    
+    ax.set_title(title, fontsize=11)
+    plt.tight_layout()
+    return created_fig if created_fig is not None else ax.figure
 
 # ============================================================================
 # 數據生成函數（從 single_access_analysis.py 整合）
@@ -200,116 +388,6 @@ def generate_figure2_data(fig1_data):
         print(f"  {key} 誤差計算完成")
     
     return error_results
-
-# ============================================================================
-# 第三部分：繪圖函數（從 plotting.py 複製並簡化）
-# ============================================================================
-
-def extract_n_values_from_data(data_dict):
-    """從數據字典中提取 N 值列表"""
-    n_keys = []
-    n_values = []
-    for key in sorted(data_dict.keys()):
-        if key.startswith('N_'):
-            n_val = int(key.split('_')[1])
-            n_keys.append(key)
-            n_values.append(n_val)
-    return n_keys, n_values
-
-def plot_figure1(fig1_data, ax):
-    """
-    繪製論文Figure 1: 單次隨機接入中分析模型vs近似公式
-    """
-    # 從數據中自動提取 N 值
-    available_N_keys, available_N_values = extract_n_values_from_data(fig1_data)
-    if not available_N_keys:
-        raise ValueError(f"數據中沒有找到任何 N 值")
-
-    # 單一 N 值的繪製
-    if len(available_N_keys) != 1:
-        raise ValueError("此獨立版本僅支援單一 N 值的繪製")
-    
-    N_key = available_N_keys[0]
-    N_value = available_N_values[0]
-    N_data = fig1_data[N_key]
-    
-    # 成功RAO: 分析模型 vs 近似公式4
-    ax.plot(N_data['M_over_N'], N_data['analytical_N_S'], 'ko-', linewidth=1.5, markersize=4, 
-            label=f'N={N_value} $N_{{S,1}}$/N Analytical Model')
-    ax.plot(N_data['M_over_N'], N_data['approx_N_S'], 'k:', linewidth=1.5, 
-            label='$N_{S,1}$/N Derived Performance Metric, Eq. (4)')
-    
-    # 碰撞RAO: 分析模型 vs 近似公式5
-    ax.plot(N_data['M_over_N'], N_data['analytical_N_C'], 'ko', fillstyle='none', markersize=4, linewidth=1.5,
-            label=f'N={N_value} $N_{{C,1}}$/N Analytical Model')
-    ax.plot(N_data['M_over_N'], N_data['approx_N_C'], 'k--', linewidth=1.5, 
-            label='$N_{C,1}$/N Derived Performance Metric, Eq. (5)')
-    
-    ax.set_xlabel('M/N', fontsize=12)
-    ax.set_ylabel('RAOs/N', fontsize=12)
-    ax.set_title(f'Fig. 1. Analytical and approximation results of $N_{{S,1}}$/N and $N_{{C,1}}$/N', 
-                fontsize=11)
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8, loc='best')
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 1)
-
-def plot_figure2(fig2_data, ax):
-    """
-    繪製論文Figure 2: 絕對近似誤差分析
-    """
-    # 從數據中自動提取 N 值
-    available_N_keys, available_N_values = extract_n_values_from_data(fig2_data)
-    
-    if not available_N_keys:
-        raise ValueError(f"數據中沒有找到任何 N 值")
-    
-    # 動態繪製每個 N 值的誤差曲線（使用論文格式）
-    for i, (N_key, N_value) in enumerate(zip(available_N_keys, available_N_values)):
-        N_data = fig2_data[N_key]
-        
-        # 根據 N 值選擇不同的樣式
-        if i == 0:
-            # 第一個 N 值：使用標記點
-            # 成功 RAO 誤差（實心圓標記 + 實線）
-            ax.plot(N_data['M_over_N'], N_data['N_S_error'], 
-                    'ko-', linewidth=1.5, markersize=4,
-                    label=f'N={N_value} $N_{{S,1}}$/N')
-            # 碰撞 RAO 誤差（空心圓標記 + 實線）
-            ax.plot(N_data['M_over_N'], N_data['N_C_error'], 
-                    'ko-', fillstyle='none', linewidth=1.5, markersize=4,
-                    label=f'N={N_value} $N_{{C,1}}$/N')
-        else:
-            # 其他 N 值：僅使用線型
-            # 成功 RAO 誤差（實線）
-            ax.plot(N_data['M_over_N'], N_data['N_S_error'], 
-                    'k-', linewidth=1.5,
-                    label=f'N={N_value} $N_{{S,1}}$/N')
-            # 碰撞 RAO 誤差（虛線）
-            ax.plot(N_data['M_over_N'], N_data['N_C_error'], 
-                    'k--', linewidth=1.5,
-                    label=f'N={N_value} $N_{{C,1}}$/N')
-    
-    # 設置軸和標籤
-    ax.set_xlabel('M/N', fontsize=12)
-    ax.set_ylabel('Approximation Error (%)', fontsize=12)
-    ax.set_xlim(0, 10)
-    
-    # 設置對數縱軸 (按照論文Figure 2: 10^-2 到 10^3)
-    ax.set_yscale('log')
-    ax.set_ylim(1e-2, 1e3)
-    
-    # 添加網格
-    ax.grid(True, alpha=0.3)
-    
-    # 添加圖例
-    ax.legend(fontsize=8, loc='best')
-    
-    # 動態設置標題
-    N_values_str = ' and '.join(map(str, available_N_values))
-    title = f'Fig. 2. Absolute approximation error of $N_{{S,1}}$/N and $N_{{C,1}}$/N with N = {N_values_str}'
-    
-    ax.set_title(title, fontsize=11)
 
 # ============================================================================
 # 主程式
