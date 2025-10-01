@@ -2,21 +2,23 @@
 # -*- coding: utf-8 -*-
 """
 生成論文Figure 1和Figure 2：單次隨機接入中近似公式的有效範圍分析
-完全獨立版本 - 僅依賴標準庫和基礎科學計算套件
+完全獨立版本 - 僅依賴標準    if num_subplots == 1:
+        fig, axes = plt.subplots(1, 1, figsize=(7, 5))
+        axes = [axes]
+    elif num_subplots == 2:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))學計算套件
 
 ====================================
 依賴套件（需要先安裝）：
 pip install numpy matplotlib joblib tqdm
-====================================
-
 說明：
 此文件包含所有必需的代碼（數學公式、數據生成、繪圖函數），
 不依賴項目中的任何其他模組，可以完全獨立運行。
 """
 
 # ===== 配置參數 =====
-N_VALUES = [3]  # 要分析的 N 值列表，例如 [3, 14] 或 [14]
-N_JOBS = 16      # 並行進程數（建議設為 CPU 核心數）
+N_VALUES = [7]  # 要分析的 N 值列表，例如 [3, 14] 或 [14]
+N_JOBS = -1      # 並行進程數（-1 表示使用所有 CPU 核心，或設定具體數字）
 # ===================
 
 import os
@@ -109,14 +111,14 @@ def plot_figure1(fig1_data, ax: 'matplotlib.axes.Axes' = None):
     # 否則按原邏輯建立子圖
     num_plots = len(available_N_keys)
     if num_plots == 1:
-        fig, axes = plt.subplots(1, 1, figsize=(10, 6))
+        fig, axes = plt.subplots(1, 1, figsize=(7, 5))
         axes = [axes]
     elif num_plots == 2:
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     else:
         rows = (num_plots + 1) // 2
         cols = 2
-        fig, axes = plt.subplots(rows, cols, figsize=(16, 6*rows))
+        fig, axes = plt.subplots(rows, cols, figsize=(12, 5*rows))
         if rows > 1:
             axes = axes.flatten()
         else:
@@ -184,7 +186,7 @@ def plot_figure2(fig2_data, ax: 'matplotlib.axes.Axes' = None):
     """
     created_fig = None
     if ax is None:
-        created_fig, ax = plt.subplots(figsize=(12, 8))
+        created_fig, ax = plt.subplots(figsize=(8, 6))
     
     # 從數據中自動提取 N 值
     available_N_keys, available_N_values = extract_n_values_from_data(fig2_data)
@@ -266,15 +268,19 @@ def compute_single_point(M, N):
     計算單個(M,N)點的分析模型和近似公式結果
     
     Returns:
-        tuple: (M, N_S_anal/N, N_C_anal/N, N_S_approx/N, N_C_approx/N)
+        tuple: (M, N_S_anal/N, N_C_anal/N, N_S_approx/N, N_C_approx/N, elapsed_time)
     """
-    # 分析模型結果
+    start_time = time.time()
+    
+    # 分析模型結果（耗時操作）
     N_S_anal, N_C_anal = analytical_model(M, N)
     
-    # 近似公式結果  
+    # 近似公式結果（快速操作）
     N_S_approx, N_C_approx = approximation_formula(M, N)
     
-    return (M, N_S_anal/N, N_C_anal/N, N_S_approx/N, N_C_approx/N)
+    elapsed = time.time() - start_time
+    
+    return (M, N_S_anal/N, N_C_anal/N, N_S_approx/N, N_C_approx/N, elapsed)
 
 def generate_figure1_data(n_values, n_jobs):
     """
@@ -286,17 +292,9 @@ def generate_figure1_data(n_values, n_jobs):
     for N in n_values:
         print(f"\n正在計算 N={N} 的數據...")
         
-        # 目標 M/N 網格（與論文座標一致）
-        target_m_over_n = np.arange(0, 10.5, 0.5)  # 0, 0.5, 1, ..., 10
-        # 僅保留能被當前 N 精確表示的點（使 M 為整數）
-        M_range = []
-        for m_n in target_m_over_n:
-            m_real = m_n * N
-            if abs(round(m_real) - m_real) < 1e-9:
-                M_range.append(int(round(m_real)))
-        # 移除 0（若存在），並保證至少從 1 開始
-        M_range = [m for m in sorted(set(M_range)) if m >= 1]
-        print(f"  將計算 {len(M_range)} 個精確 M/N 點: {[f'{m/N:.2f}' for m in M_range]}")
+        # M 從 N 到 10N，每次增加 1
+        M_range = list(range(N, 10*N + 1))
+        print(f"  將計算 {len(M_range)} 個數據點: M = {N} 到 {10*N} (共 {len(M_range)} 個點)")
         
         start_time = time.time()
         
@@ -309,39 +307,67 @@ def generate_figure1_data(n_values, n_jobs):
             analytical_N_C = []
             approx_N_S = []
             approx_N_C = []
+            time_costs = []
             
             for idx, M in enumerate(M_range):
+                point_start = time.time()
                 print(f"  計算數據點 {idx+1}: M={M}, M/N={M/N:.2f}", end=' ... ')
                 
-                M_result, ns_anal_norm, nc_anal_norm, ns_approx_norm, nc_approx_norm = compute_single_point(M, N)
+                M_result, ns_anal_norm, nc_anal_norm, ns_approx_norm, nc_approx_norm, elapsed = compute_single_point(M, N)
                 
                 M_values.append(M_result)
                 analytical_N_S.append(ns_anal_norm)
                 analytical_N_C.append(nc_anal_norm)
                 approx_N_S.append(ns_approx_norm)
                 approx_N_C.append(nc_approx_norm)
+                time_costs.append(elapsed)
                 
-                print("完成")
+                print(f"完成 (耗時 {elapsed:.2f}秒)")
         else:
             # 多核心並行計算
             print(f"  多核心並行計算 {len(M_range)} 個數據點 (使用 {n_jobs} 個核心)...")
+            print(f"  任務列表: M = {M_range}")
+            print(f"  ⏳ 開始並行計算...")
             
-            # 使用默認的 loky backend，充分利用多核心並行計算，並顯示進度條
-            results_list = Parallel(n_jobs=n_jobs)(
-                delayed(compute_single_point)(M, N) for M in tqdm(M_range, desc=f"  計算 N={N}", unit="點")
+            # 使用 loky backend 並設定 batch_size 以優化任務分配
+            results_list = Parallel(n_jobs=n_jobs, backend='loky', batch_size='auto', verbose=5)(
+                delayed(compute_single_point)(M, N) for M in M_range
             )
             
             print(f"  ✓ 完成 {len(M_range)} 個數據點的並行計算")
             
-            # 解包結果
+            # 解包結果並顯示詳細時間統計
             M_values = [r[0] for r in results_list]
             analytical_N_S = [r[1] for r in results_list]
             analytical_N_C = [r[2] for r in results_list]
             approx_N_S = [r[3] for r in results_list]
             approx_N_C = [r[4] for r in results_list]
+            time_costs = [r[5] for r in results_list]
+            
+            # 顯示詳細的每個任務時間
+            print(f"\n  ┌─ 各任務計算時間詳情 ─┐")
+            total_sequential_time = 0
+            for i, (m, t) in enumerate(zip(M_values, time_costs), 1):
+                print(f"  │ Task {i:2d}: M={m:3d} (M/N={m/N:5.2f}) → {t:7.2f} 秒")
+                total_sequential_time += t
+            print(f"  └─────────────────────┘")
+            
+            # 計算實際並行時間
+            elapsed_time = time.time() - start_time
+            
+            # 顯示統計信息
+            print(f"\n  📊 時間統計:")
+            print(f"  ├─ 任務總數: {len(M_range)} 個")
+            print(f"  ├─ 最快任務: M={M_values[time_costs.index(min(time_costs))]}, 耗時 {min(time_costs):.2f} 秒")
+            print(f"  ├─ 最慢任務: M={M_values[time_costs.index(max(time_costs))]}, 耗時 {max(time_costs):.2f} 秒")
+            print(f"  ├─ 平均耗時: {sum(time_costs)/len(time_costs):.2f} 秒/任務")
+            print(f"  ├─ 串行總時長: {total_sequential_time:.2f} 秒 (如果用1個核心)")
+            print(f"  ├─ 實際並行時長: {elapsed_time:.2f} 秒 (用{n_jobs}個核心)")
+            print(f"  └─ 並行加速比: {total_sequential_time/elapsed_time:.2f}x")
         
-        elapsed_time = time.time() - start_time
-        print(f"N={N} 計算完成，耗時: {elapsed_time:.2f}秒")
+        if n_jobs > 1:
+            elapsed_time = time.time() - start_time
+        print(f"N={N} 計算完成，總耗時: {elapsed_time:.2f}秒")
         
         results[f'N_{N}'] = {
             'M_values': M_values,
@@ -396,15 +422,19 @@ def generate_figure2_data(fig1_data):
 # ============================================================================
 
 def main():
+    # 自動偵測並設定 CPU 核心數
+    actual_n_jobs = N_JOBS if N_JOBS > 0 else multiprocessing.cpu_count()
+    
     print("=" * 60)
     print("生成論文Figure 1和Figure 2：Analytical vs Approximation")
     print("【完全獨立版本 - 不依賴其他模組】")
-    print(f"分析參數：N = {N_VALUES}, 並行進程數 = {N_JOBS}")
+    print(f"分析參數：N = {N_VALUES}")
+    print(f"CPU 核心數：{multiprocessing.cpu_count()} (使用 {actual_n_jobs} 個核心)")
     print("=" * 60)
     
     # 生成數據
     print("\n正在生成Figure 1數據（多核心並行計算）...")
-    fig1_data = generate_figure1_data(n_values=N_VALUES, n_jobs=N_JOBS)
+    fig1_data = generate_figure1_data(n_values=N_VALUES, n_jobs=actual_n_jobs)
     
     print("\n正在生成Figure 2數據（重用Figure 1數據）...")
     fig2_data = generate_figure2_data(fig1_data)
@@ -420,8 +450,8 @@ def main():
     # 創建 2 行 × N 列的子圖佈局
     # 第一行：所有 N 值的 Fig1
     # 第二行：所有 N 值的 Fig2
-    fig_width = 8 * num_n_values  # 每個子圖寬度 8
-    fig_height = 12  # 總高度 12（每行 6）
+    fig_width = 8 * num_n_values  # 每個子圖寬度 5
+    fig_height = 10  # 總高度 8（每行 4）
     fig_combined, axes = plt.subplots(2, num_n_values, figsize=(fig_width, fig_height), 
                                       constrained_layout=True, squeeze=False)
     

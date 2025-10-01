@@ -100,15 +100,15 @@ def plot_figure1_simulation_validation(sim_vs_approx_data, ax: 'matplotlib.axes.
     # 根據可用數據數量設置子圖佈局
     num_plots = len(available_N_keys)
     if num_plots == 1:
-        fig, axes = plt.subplots(1, 1, figsize=(10, 6))
+        fig, axes = plt.subplots(1, 1, figsize=(7, 5))
         axes = [axes]  # 轉換為列表以統一處理
     elif num_plots == 2:
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     else:
         # 對於3個或更多N值，使用2行布局
         rows = (num_plots + 1) // 2
         cols = 2
-        fig, axes = plt.subplots(rows, cols, figsize=(16, 6*rows))
+        fig, axes = plt.subplots(rows, cols, figsize=(12, 5*rows))
         if rows > 1:
             axes = axes.flatten()
         else:
@@ -161,7 +161,7 @@ def plot_figure2_simulation_validation(error_data, ax: 'matplotlib.axes.Axes' = 
     """
     created_fig = None
     if ax is None:
-        created_fig, ax = plt.subplots(figsize=(12, 8))
+        created_fig, ax = plt.subplots(figsize=(8, 6))
     
     # 從數據中自動提取 N 值
     available_N_keys, available_N_values = extract_n_values_from_data(error_data)
@@ -426,8 +426,8 @@ def main():
     num_n_values = len(N_VALUES)
     
     # 創建 2 行 × N 列的子圖佈局（與 analytical 一致）
-    fig_width = 8 * num_n_values
-    fig_height = 12
+    fig_width = 5 * num_n_values
+    fig_height = 8
     fig_combined, axes = plt.subplots(2, num_n_values, figsize=(fig_width, fig_height), 
                                       constrained_layout=True, squeeze=False)
     

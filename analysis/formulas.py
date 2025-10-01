@@ -5,6 +5,16 @@ from math import factorial, comb
 import itertools
 from functools import lru_cache
 
+# 添加 LRU 緩存以加速重複計算
+@lru_cache(maxsize=10000)
+def paper_formula_1_pk_probability_cached(M: int, N1: int, k: int) -> float:
+    """
+    论文公式(1)的完全精确实现（帶緩存）：pk(M,N1)
+    
+    使用 LRU 緩存避免重複計算相同的 (M, N1, k) 組合
+    """
+    return paper_formula_1_pk_probability_uncached(M, N1, k)
+
 def generate_partitions(n: int, k: int, min_val: int = 2):
     """
     生成所有满足条件的整数分割：i1+i2+...+ik = n, 每个ij >= min_val
@@ -63,6 +73,15 @@ def paper_formula_1_pk_probability(M: int, N1: int, k: int) -> float:
     严格按照论文中的多重求和结构实现
     不使用任何概率近似或简化
     添加LRU快取以避免重複計算
+    """
+    # 使用緩存版本
+    return _paper_formula_1_pk_probability_impl(M, N1, k)
+
+
+@lru_cache(maxsize=10000)
+def _paper_formula_1_pk_probability_impl(M: int, N1: int, k: int) -> float:
+    """
+    实际计算函数（帶緩存）
     """
     if k < 0 or k > min(N1, M // 2):
         return 0.0
