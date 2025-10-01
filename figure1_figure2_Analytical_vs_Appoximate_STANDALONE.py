@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 生成論文Figure 1和Figure 2：單次隨機接入中近似公式的有效範圍分析
-完全獨立版本 - 不依賴專案內其他模組
+獨立版本 - 僅依賴 formulas.py（核心公式模組）
 
 ====================================
 依賴套件（需要先安裝）：
@@ -10,15 +10,14 @@ pip install numpy matplotlib joblib tqdm
 ====================================
 
 說明：
-此文件整合了原本分散在 analysis/single_access_analysis.py、
-analysis/formulas.py 和 visualization/plotting.py 中的所有必要程式碼，
-可以獨立運行，不需要其他專案模組。
+此文件整合了原本在 analysis/single_access_analysis.py 中的數據生成代碼，
+但從 analysis/formulas.py 導入數學公式（核心模組，無條件保留）。
 """
 
 import os
+import sys
 from datetime import datetime
 import multiprocessing
-from math import factorial, comb
 import numpy as np
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -32,6 +31,17 @@ except Exception:
 
 import matplotlib.pyplot as plt
 
+# 添加當前目錄到路徑
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 從核心模組導入數學公式（這些是專案的核心共用元件）
+from analysis.formulas import (
+    paper_formula_2_collision_raos_exact,
+    paper_formula_3_success_raos_exact,
+    paper_formula_4_success_approx,
+    paper_formula_5_collision_approx
+)
+
 # 設置matplotlib支持中文顯示
 matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解決負號顯示問題
@@ -42,176 +52,7 @@ N_JOBS = 16      # 並行進程數（建議設為 CPU 核心數）
 # ===================
 
 # ============================================================================
-# 第一部分：數學公式實現（從 formulas.py 複製）
-# ============================================================================
-
-def generate_partitions(n: int, k: int, min_val: int = 2):
-    """
-    生成所有满足条件的整数分割：i1+i2+...+ik = n, 每个ij >= min_val
-    使用生成器以減少記憶體使用
-    """
-    if k == 0:
-        if n == 0:
-            yield []
-        return
-    if k == 1:
-        if n >= min_val:
-            yield [n]
-        return
-    
-    for first in range(min_val, n - min_val * (k - 1) + 1):
-        for rest in generate_partitions(n - first, k - 1, min_val):
-            yield [first] + rest
-
-def paper_formula_1_pk_probability(M: int, N1: int, k: int) -> float:
-    """
-    论文公式(1)的完全精确实现：pk(M,N1)
-    
-    严格按照论文中的多重求和结构实现
-    不使用任何概率近似或简化
-    """
-    if k < 0 or k > min(N1, M // 2):
-        return 0.0
-    
-    total_ways = N1 ** M
-    
-    # 计算满足条件的方法数
-    valid_ways = 0
-    
-    # 遍历碰撞RAO中的总用户数（从2k到M）
-    for total_in_collision in range(2 * k, M + 1):
-        # 剩余的用户数分配到非碰撞RAO
-        remaining_users = M - total_in_collision
-        
-        # 非碰撞RAO数量为 N1 - k
-        # 每个非碰撞RAO最多1个用户，所以 remaining_users <= N1 - k
-        if remaining_users > N1 - k:
-            continue
-        
-        # 生成将total_in_collision个用户分配到k个碰撞RAO的所有方式（每个至少2个用户）
-        partitions = generate_partitions(total_in_collision, k, 2)
-        
-        for partition in partitions:
-            # 计算将用户分配到特定分区的方式数
-            ways_collision = 1
-            remaining = M
-            for count in partition:
-                ways_collision *= comb(remaining, count)
-                remaining -= count
-            
-            # 计算将剩余用户分配到非碰撞RAO的方式数
-            # 从N1-k个非碰撞RAO中选择remaining_users个，每个分配1个用户
-            ways_non_collision = comb(N1 - k, remaining_users) * factorial(remaining_users)
-            
-            # 计算将用户分配到特定RAO的方式数
-            ways_specific_assignment = ways_collision * ways_non_collision
-            
-            # 乘以选择哪k个RAO作为碰撞RAO的方式数
-            ways_choose_collision_raos = comb(N1, k)
-            
-            valid_ways += ways_specific_assignment * ways_choose_collision_raos
-    
-    pk = valid_ways / total_ways if total_ways > 0 else 0.0
-    return pk
-
-def paper_formula_2_collision_raos_exact(M: int, N1: int) -> float:
-    """
-    论文公式(2)的完全精确实现：NC,1
-    
-    NC,1 = Σ(k=1 to min{N1,⌊M/2⌋}) k * pk(M,N1)
-    """
-    if M <= 1 or N1 == 0:
-        return 0.0
-    
-    NC_1 = 0.0
-    max_k = min(N1, M // 2)
-    
-    for k in range(1, max_k + 1):
-        pk_val = paper_formula_1_pk_probability(M, N1, k)
-        NC_1 += k * pk_val
-    
-    return NC_1
-
-def paper_formula_3_success_raos_exact(M: int, N1: int) -> float:
-    """
-    论文公式(3)的完全精确实现：NS,1
-    
-    使用完整的多重求和结构计算期望的成功用户数
-    """
-    if M == 0 or N1 == 0:
-        return 0.0
-    
-    NS_1 = 0.0
-    max_k = min(N1, M // 2)
-    
-    # 为每个k值计算概率和条件期望
-    for k in range(0, max_k + 1):
-        pk_val = paper_formula_1_pk_probability(M, N1, k)
-        
-        if pk_val == 0:
-            continue
-        
-        # 对于每个k，计算期望的成功用户数
-        expected_success_given_k = 0.0
-        
-        # 遍历碰撞RAO中的总用户数
-        for total_in_collision in range(2 * k if k > 0 else 0, M + 1):
-            remaining_users = M - total_in_collision
-            
-            if remaining_users > N1 - k:
-                continue
-            
-            # 计算在给定k和total_in_collision的情况下，这个配置的概率
-            ways_this_config = 0
-            
-            if k == 0:
-                # 没有碰撞RAO的特殊情况
-                if total_in_collision == 0 and remaining_users <= N1:
-                    ways_non_collision = comb(N1, remaining_users) * factorial(remaining_users)
-                    ways_this_config = ways_non_collision
-            else:
-                partitions = generate_partitions(total_in_collision, k, 2)
-                for partition in partitions:
-                    ways_collision = 1
-                    remaining = M
-                    for count in partition:
-                        ways_collision *= comb(remaining, count)
-                        remaining -= count
-                    
-                    ways_non_collision = comb(N1 - k, remaining_users) * factorial(remaining_users)
-                    ways_specific_assignment = ways_collision * ways_non_collision
-                    ways_choose_collision_raos = comb(N1, k)
-                    
-                    ways_this_config += ways_specific_assignment * ways_choose_collision_raos
-            
-            total_ways = N1 ** M
-            prob_this_config = ways_this_config / total_ways if total_ways > 0 else 0
-            
-            if prob_this_config > 0:
-                # 在这个配置下，成功用户数就是remaining_users
-                expected_success_given_k += remaining_users * (prob_this_config / pk_val)
-        
-        NS_1 += expected_success_given_k * pk_val
-    
-    return NS_1
-
-def paper_formula_4_success_approx(M, N1):
-    """
-    論文公式(4): NS,1 = M * e^(-M/N1)
-    成功RAO近似公式
-    """
-    return M * np.exp(-M / N1)
-
-def paper_formula_5_collision_approx(M, N1):
-    """
-    論文公式(5): NC,1 = N1 * (1 - e^(-M/N1) * (1 + M/N1))
-    碰撞RAO近似公式
-    """
-    exp_term = np.exp(-M / N1)
-    return N1 * (1 - exp_term * (1 + M/N1))
-
-# ============================================================================
-# 第二部分：數據生成函數（從 single_access_analysis.py 複製）
+# 數據生成函數（從 single_access_analysis.py 整合）
 # ============================================================================
 
 def analytical_model(M, N):
