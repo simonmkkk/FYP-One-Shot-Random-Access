@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Numba cache files (不使用Numba但可能產生的緩存)
+*.nbc
+*.nbi
+
 # C extensions
 *.so
 

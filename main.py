@@ -14,7 +14,7 @@ from utils.file_io import save_single_results_to_csv, save_scan_results_to_csv
 from analysis.theoretical import theoretical_calculation
 
 # ============================================================================
-# 配置參數設置（整合自 settings.py）
+# 配置參數設置
 # ============================================================================
 
 # ===== 運行模式 =====

@@ -9,7 +9,7 @@ from tqdm import tqdm
 # 第一層：核心單次模擬函數（最基本的原子操作）
 # ============================================================================
 
-def simulate_single_one_shot_access(M, N):
+def simulate_one_shot_access_single_sample(M, N):
     """
     【核心原子函數】模擬一次 One-Shot Random Access（單個 AC）
     
@@ -32,7 +32,7 @@ def simulate_single_one_shot_access(M, N):
         - 用於驗證公式 (1)-(5) 的模擬基礎
     
     範例:
-        >>> simulate_single_one_shot_access(M=10, N=5)
+        >>> simulate_one_shot_access_single_sample(M=10, N=5)
         (3, 2, 0)  # 3個成功, 2個碰撞, 0個空閒
     """
     # 步驟1: 每個設備隨機選擇一個 RAO（0 到 N-1）
@@ -98,13 +98,13 @@ def simulate_one_shot_access_multi_samples(M, N, num_samples, num_workers):
     if num_workers == 1:
         # 單線程模式（用於調試或小規模測試）
         results = [
-            simulate_single_one_shot_access(M, N)
+            simulate_one_shot_access_single_sample(M, N)
             for _ in tqdm(range(num_samples), desc="單線程模擬", unit="樣本")
         ]
     else:
         # 多線程模式（生產環境）
         results = Parallel(n_jobs=num_workers)(
-            delayed(simulate_single_one_shot_access)(M, N)
+            delayed(simulate_one_shot_access_single_sample)(M, N)
             for _ in tqdm(range(num_samples), desc="並行模擬", unit="樣本")
         )
     
@@ -185,7 +185,7 @@ def simulate_group_paging_multi_samples(M, N, I_max, num_samples, num_workers):
     # 並行執行多次完整模擬
     # 每個樣本獨立執行一次完整的群組尋呼過程（I_max 個 AC）
     results = Parallel(n_jobs=num_workers)(
-        delayed(_simulate_single_group_paging)(M, N, I_max)
+        delayed(simulate_group_paging_single_sample)(M, N, I_max)
         for _ in tqdm(range(num_samples), desc="模擬進度", unit="樣本")
     )
     
@@ -205,7 +205,7 @@ def simulate_group_paging_multi_samples(M, N, I_max, num_samples, num_workers):
     return results_array
 
 
-def _simulate_single_group_paging(M, N, I_max):
+def simulate_group_paging_single_sample(M, N, I_max):
     """
     【內部函數】模擬一次完整的群組尋呼過程（從第 1 個 AC 到第 I_max 個 AC）
     
@@ -248,7 +248,7 @@ def _simulate_single_group_paging(M, N, I_max):
         
         # ===== 步驟1: 執行當前 AC 的 one-shot random access =====
         # 調用核心函數模擬 remaining_devices 個設備競爭 N 個 RAO
-        success_raos, collision_raos, _ = simulate_single_one_shot_access(
+        success_raos, collision_raos, _ = simulate_one_shot_access_single_sample(
             remaining_devices, N
         )
         
