@@ -47,7 +47,7 @@
 ### 環境準備
 
 **系統要求**
-- Python 3.13.7（推薦）或 3.8+
+- Python 3.13.7（固定版本）
 - 4GB+ RAM
 - 多核心 CPU（推薦）
 
@@ -58,7 +58,7 @@
 pip install uv
 uv venv
 .venv\Scripts\Activate.ps1          # Windows PowerShell
-uv pip install -r requirements.txt
+pip install -r requirements.txt
 
 # 方法 2：使用 pip
 python -m venv venv
@@ -69,7 +69,7 @@ pip install -r requirements.txt
 **驗證安裝**
 
 ```bash
-python -c "import numpy, matplotlib, joblib, tqdm; print('✅ 環境就緒')"
+python -c "import numpy, matplotlib, joblib, tqdm, pandas, scipy, multiprocessing_logging; print('✅ 環境就緒')"
 ```
 
 ### 第一次運行
@@ -170,7 +170,7 @@ python main.py
 ### 目錄結構（層次化）
 
 ```
-FYP-One-Shot-Random-Access/
+FYP-1-One-Shot-Random-Access/
 │
 ├── 🎮 main.py                    # 入口：運行模式選擇
 │
@@ -412,45 +412,51 @@ PC = (Σ NC,i) / (I_max · N)
 ```python
 # Layer 1：單個 AC，單次隨機接入
 def simulate_one_shot_access_single_sample(M, N):
-    devices = np.random.randint(0, N, size=M)  # M設備隨機選擇
-    rao_counts = np.bincount(devices, minlength=N)
-    
+    choices = np.random.randint(0, N, size=M)  # M 個設備隨機選擇 RAO
+    rao_counts = np.bincount(choices, minlength=N)
+
     success_raos = np.sum(rao_counts == 1)
     collision_raos = np.sum(rao_counts >= 2)
     idle_raos = np.sum(rao_counts == 0)
-    
+
     return success_raos, collision_raos, idle_raos
 
 # Layer 2：多樣本統計（用於 Figure 1-2）
-def simulate_one_shot_access_multi_samples(M, N, samples, workers):
-    results = Parallel(n_jobs=workers)(
+def simulate_one_shot_access_multi_samples(M, N, num_samples, num_workers):
+    results = Parallel(n_jobs=num_workers)(
         delayed(simulate_one_shot_access_single_sample)(M, N)
-        for _ in range(samples)
+        for _ in range(num_samples)
     )
-    return np.mean(results, axis=0)
+    results_array = np.array(results)  # shape: [num_samples, 3]
+    mean_success = np.mean(results_array[:, 0])
+    mean_collision = np.mean(results_array[:, 1])
+    mean_idle = np.mean(results_array[:, 2])
+    return mean_success, mean_collision, mean_idle
 
 # Layer 3：群組尋呼，多 AC 迭代（用於 Figure 3-5）
 def simulate_group_paging_single_sample(M, N, I_max):
-    K = M  # 當前競爭設備數
-    success_devices = []
-    access_cycles = []
-    
-    for i in range(1, I_max + 1):
-        if K == 0:
-            break
-        
-        # 單次接入
-        success, collision, idle = simulate_one_shot_access_single_sample(K, N)
-        
-        # 記錄成功設備及其延遲
-        success_devices.extend([i] * success)
-        K -= success  # 更新競爭設備數
-    
-    # 計算指標
-    PS = len(success_devices) / M
-    Ta = np.mean(success_devices) if success_devices else -1
-    PC = sum(collision) / (I_max * N)
-    
+    remaining_devices = M
+    success_count = 0
+    success_delay_sum = 0
+    total_collision_count = 0
+
+    for ac_index in range(1, I_max + 1):
+        if remaining_devices == 0:
+            continue
+
+        success_raos, collision_raos, _ = simulate_one_shot_access_single_sample(
+            remaining_devices, N
+        )
+
+        success_count += success_raos
+        success_delay_sum += success_raos * ac_index
+        total_collision_count += collision_raos
+        remaining_devices -= success_raos
+
+    PS = success_count / M if M > 0 else 0.0
+    Ta = success_delay_sum / success_count if success_count > 0 else -1.0
+    PC = total_collision_count / (I_max * N) if I_max * N > 0 else 0.0
+
     return PS, Ta, PC
 ```
 

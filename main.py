@@ -18,11 +18,11 @@ from analysis.theoretical import theoretical_calculation
 # ============================================================================
 
 # ===== 運行模式 =====
-RUN_MODE = 'scan'  # 'single': 单点模拟, 'scan': 参数扫描
+RUN_MODE = 'single'  # 'single': 单点模拟, 'scan': 参数扫描
 
 # ===== 模擬本質參數（ALOHA系統參數）===== （This N for single）
 M = 100           # 設備總數 - 嘗試接入網絡的設備數量
-N = 30            # RAO數量 - 每個接入周期(AC)的隨機接入機會(RAO)數量
+N = 40            # RAO數量 - 每個接入周期(AC)的隨機接入機會(RAO)數量
 I_max = 10        # 最大接入周期數 - 最大重傳次數限制
 
 # ===== 參數掃描設置（僅在 RUN_MODE='scan' 時生效）=====
@@ -30,7 +30,7 @@ SCAN_PARAM = 'N'              # 掃描參數: 'N', 'M', 'I_max'
 SCAN_RANGE = range(5, 46, 1)  # 掃描範圍: N=5,6,7,...,45
 
 # ===== 性能優化參數（計算資源配置）=====
-NUM_SAMPLES = 1000   # 樣本數量 - 每個參數點的模擬次數（論文使用 10^7）
+NUM_SAMPLES = 100   # 樣本數量 - 每個參數點的模擬次數（論文使用 10^7）
 NUM_WORKERS = 16     # 並行進程數 - CPU核心數（建議設置為實際CPU核心數）
 
 # ===== 輸出設置 =====

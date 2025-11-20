@@ -3,7 +3,7 @@
 # ============================================================================
 # 項目：Modeling and Estimation of One-Shot Random Access
 # 更新日期：2025-01-13
-# Python 版本：3.13.7（推薦）或 >=3.8
+# Python 版本：3.13.7（固定）
 # 套件管理器：uv（推薦）或 pip
 # ============================================================================
 
@@ -61,7 +61,6 @@ multiprocessing-logging==0.3.4  # 多進程日誌支援
 #
 # 驗證安裝
 # -----------------------------------------------
-# python -c "import numpy, matplotlib, joblib, tqdm; print('環境配置成功！')"
+# python -c "import numpy, matplotlib, joblib, tqdm, pandas, scipy, multiprocessing_logging; print('環境配置成功！')"
 #
 # ============================================================================
-
